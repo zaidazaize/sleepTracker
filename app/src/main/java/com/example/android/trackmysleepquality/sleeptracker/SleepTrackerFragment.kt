@@ -20,11 +20,13 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.databinding.DataBindingUtil
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.fragment.findNavController
+import androidx.recyclerview.widget.GridLayoutManager
 import com.example.android.trackmysleepquality.R
 import com.example.android.trackmysleepquality.database.SleepDatabase
 import com.example.android.trackmysleepquality.databinding.FragmentSleepTrackerBinding
@@ -62,22 +64,42 @@ class SleepTrackerFragment : Fragment() {
         viewModal.navigateToSleepQuality.observe(viewLifecycleOwner, Observer { night ->
             night?.let {
                 this.findNavController().navigate(
-                    SleepTrackerFragmentDirections.actionSleepTrackerFragmentToSleepQualityFragment(night.nightId)
+                    SleepTrackerFragmentDirections.actionSleepTrackerFragmentToSleepQualityFragment(
+                        night.nightId
+                    )
                 )
                 viewModal.doneNavigation()
             }
         })
         viewModal.hideStartButton.observe(viewLifecycleOwner, Observer {
-            binding.startButton.visibility = when(it){
+            binding.startButton.visibility = when (it) {
                 true -> View.INVISIBLE
                 false -> View.VISIBLE
             }
         })
-        val adapter = context?.let { SleepAdapter(it) }
+
+        //add layout manager to the screen
+
+        val adapter = SleepAdapter(SleepClickListener { nightId ->
+            Toast.makeText(
+                context,
+                "the clicked item $nightId",
+                Toast.LENGTH_SHORT
+            ).show()
+        })
+        val layoutManager = GridLayoutManager(context, 3)
+        layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int): Int = when (position) {
+                0 -> 3
+                else -> 1
+            }
+
+        }
+        binding.sleepList.layoutManager = layoutManager
         binding.sleepList.adapter = adapter
 
         viewModal.nights.observe(viewLifecycleOwner, Observer {
-            adapter?.submitList(it)
+            adapter.addHeaderAndSubmitList(it)
         })
         return binding.root
     }

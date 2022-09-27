@@ -40,6 +40,7 @@ class SleepTrackerViewModel(
     private val _nights = database.getAllNights()
     private val _navigateToSleepQuality = MutableLiveData<SleepNight>()
     private val _hideStartButton = MutableLiveData<Boolean>()
+    //TODO: add a fragment that displays a details page when single list-item is clicked in the recycle list
 
     val navigateToSleepQuality: LiveData<SleepNight>
         get() = _navigateToSleepQuality
@@ -61,8 +62,6 @@ class SleepTrackerViewModel(
 
     init {
         initialiseToNight()
-
-
     }
 
     private fun initialiseToNight() {

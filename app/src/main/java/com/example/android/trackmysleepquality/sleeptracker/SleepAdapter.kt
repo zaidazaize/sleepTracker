@@ -1,38 +1,66 @@
 package com.example.android.trackmysleepquality.sleeptracker
 
-import android.content.Context
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
-import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.RecyclerView.ViewHolder
 import com.example.android.trackmysleepquality.R
-import com.example.android.trackmysleepquality.convertNumericQualityToString
 import com.example.android.trackmysleepquality.database.SleepNight
 import com.example.android.trackmysleepquality.databinding.SleepListitemBinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-class SleepAdapter(private val context: Context) :
-    ListAdapter<SleepNight, SleepAdapter.SleepViewHolder>(SleepNightDiffCallback()) {
+private val ITEM_VIEW_TYPE_HEADER = 0
+private val ITEM_VIEW_TYPE_ITEM = 1
 
-//    remove these as listAdapter will have method to handle list and its items
-//    var data = listOf<SleepNight>()
-//        set(value) {
-//            field = value
-//            notifyDataSetChanged()
-//        }
-//    override fun getItemCount() = data.size
+class SleepAdapter(private val sleepClickListener: SleepClickListener) :
+    ListAdapter<DataItem, ViewHolder>(SleepNightDiffCallback()) {
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SleepViewHolder {
-        return SleepViewHolder.from(parent)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+        return when (viewType) {
+            ITEM_VIEW_TYPE_HEADER -> TextViewHolder.from(parent)
+            ITEM_VIEW_TYPE_ITEM -> SleepViewHolder.from(parent)
+            else -> throw java.lang.ClassCastException("Unknown View Type ${viewType}")
+        }
     }
 
-    override fun onBindViewHolder(holder: SleepViewHolder, position: Int) {
-        holder.bind(getItem(position))
+    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+        when (holder) {
+            is SleepViewHolder -> {
+                val nightItem = getItem(position) as DataItem.SleepNightItem
+                holder.let {
+                    holder.bind(sleepClickListener, nightItem.sleepNight)
+                }
+            }
+        }
     }
 
+    override fun getItemViewType(position: Int): Int {
+        return when (getItem(position)) {
+            is DataItem.Header -> ITEM_VIEW_TYPE_HEADER
+            is DataItem.SleepNightItem -> ITEM_VIEW_TYPE_ITEM
+        }
+    }
 
-    class SleepViewHolder private constructor(val binding: SleepListitemBinding) :
-        RecyclerView.ViewHolder(binding.root) {
+    private val adapterScope = CoroutineScope(Dispatchers.Default)
+    fun addHeaderAndSubmitList(list: List<SleepNight>?) {
+        adapterScope.launch {
+            val item = when (list) {
+                null -> listOf(DataItem.Header)
+                else -> listOf(DataItem.Header) + list.map { DataItem.SleepNightItem(it) }
+            }
+            withContext(Dispatchers.Main) {
+                submitList(item)
+            }
+        }
+    }
+
+    class SleepViewHolder private constructor(private val binding: SleepListitemBinding) :
+        ViewHolder(binding.root) {
 
         companion object {
             fun from(parent: ViewGroup): SleepViewHolder {
@@ -46,34 +74,50 @@ class SleepAdapter(private val context: Context) :
         }
 
         fun bind(
-            d: SleepNight
+            sleepClickListener: SleepClickListener,
+            night: SleepNight
         ) {
-            binding.sleepQuality.text =
-                convertNumericQualityToString(d.sleepQuality, binding.root.resources)
-            binding.sleepDuration.text = (d.endTimeMilli - d.endTimeMilli).toString()
-            binding.imageViewQuality.setImageResource(
-                when (d.sleepQuality) {
-                    0 -> R.drawable.ic_sleep_0
-                    1 -> R.drawable.ic_sleep_1
-                    2 -> R.drawable.ic_sleep_2
-                    3 -> R.drawable.ic_sleep_3
-                    4 -> R.drawable.ic_sleep_4
-                    5 -> R.drawable.ic_sleep_5
-                    else -> R.drawable.ic_sleep_0
-                }
-            )
+            binding.sleep = night
+            binding.sleepClickListener = sleepClickListener
+            binding.executePendingBindings()
+        }
+    }
+
+    class TextViewHolder(view: View) : ViewHolder(view) {
+        companion object {
+            fun from(parent: ViewGroup): TextViewHolder {
+                val layoutInflater = LayoutInflater.from(parent.context)
+                val view = layoutInflater.inflate(R.layout.header, parent, false)
+                return TextViewHolder(view)
+            }
         }
     }
 }
 
-class SleepNightDiffCallback : DiffUtil.ItemCallback<SleepNight>() {
-    override fun areItemsTheSame(oldItem: SleepNight, newItem: SleepNight): Boolean {
-        return oldItem.nightId == newItem.nightId
+class SleepNightDiffCallback : DiffUtil.ItemCallback<DataItem>() {
+    override fun areItemsTheSame(oldItem: DataItem, newItem: DataItem): Boolean {
+        return oldItem.id == newItem.id
     }
 
-    override fun areContentsTheSame(oldItem: SleepNight, newItem: SleepNight): Boolean {
+    override fun areContentsTheSame(oldItem: DataItem, newItem: DataItem): Boolean {
         //note in data class == compares value of each field (implemented by default)
         return oldItem == newItem
     }
+}
+
+class SleepClickListener(val clickListener: (sleepId: Long) -> Unit) {
+    fun onClick(sleepNight: SleepNight) = clickListener(sleepNight.nightId)
+}
+
+sealed class DataItem {
+    data class SleepNightItem(val sleepNight: SleepNight) : DataItem() {
+        override val id = sleepNight.nightId
+    }
+
+    object Header : DataItem() {
+        override val id = Long.MIN_VALUE
+    }
+
+    abstract val id: Long
 
 }
